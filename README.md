@@ -9,6 +9,7 @@ A small Windows app that shows what fills your disk and cleans the junk safely. 
 ## What it does
 
 **Disk map (like WizTree / WinDirStat)**
+- Scans only when you press Scan (or tick "Scan on start"), using at most half your CPU cores.
 - Scans a drive or folder and draws it as a treemap: the bigger the block, the bigger the folder or file. Files are coloured by type.
 - Hover over a block to outline it and see its path and size. Click to select, double-click to zoom in.
 - The breadcrumb at the top jumps back to any parent. Backspace or the mouse back button also go up a level.

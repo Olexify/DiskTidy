@@ -38,6 +38,8 @@ namespace DiskTidy {
   public static class Scanner {
     public static long Files, Bytes; public static volatile bool Cancel;
     const int KeepFiles = 40; // per folder; the rest are merged into one "[N smaller files]" block to save RAM
+    // Use at most half the CPU cores so the PC stays responsive while scanning.
+    static readonly ParallelOptions Gentle = new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount / 2) };
 
     public static Task<Node> Start(string root) {
       Files = 0; Bytes = 0; Cancel = false;
@@ -55,7 +57,7 @@ namespace DiskTidy {
           else { k.Size = ((FileInfo)e).Length; k.Files = 1; files.Add(k); Interlocked.Increment(ref Files); Interlocked.Add(ref Bytes, k.Size); }
         }
       } catch { } // access denied: keep what we got
-      if (depth < 2) Parallel.ForEach(dirs, d => Fill(d, depth + 1));
+      if (depth < 2) Parallel.ForEach(dirs, Gentle, d => Fill(d, depth + 1));
       else foreach (Node d in dirs) Fill(d, depth + 1);
 
       long size = 0, count = files.Count;
@@ -291,7 +293,11 @@ namespace DiskTidy {
     }
 
     public static Task MeasureAll(IList<CleanItem> items) {
-      return Task.Run(() => { foreach (CleanItem it in items) Refresh(it); });
+      return Task.Run(() => {
+        ThreadPriority was = Thread.CurrentThread.Priority;
+        Thread.CurrentThread.Priority = ThreadPriority.BelowNormal; // background sizing must not slow down what you are doing
+        try { foreach (CleanItem it in items) Refresh(it); } finally { Thread.CurrentThread.Priority = was; }
+      });
     }
 
     class Result { public long Freed; public int Skipped; }
@@ -509,8 +515,8 @@ $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIden
 
 # ---------- settings ----------
 $cfgFile = Join-Path $env:APPDATA 'DiskTidy\settings.json'
-$cfg = @{ Theme = 'Light'; Zoom = 1.0 }
-try { $j = Get-Content $cfgFile -Raw | ConvertFrom-Json; if ($j.Theme) { $cfg.Theme = $j.Theme }; if ($j.Zoom) { $cfg.Zoom = [double]$j.Zoom } } catch { }
+$cfg = @{ Theme = 'Light'; Zoom = 1.0; AutoScan = $false }
+try { $j = Get-Content $cfgFile -Raw | ConvertFrom-Json; if ($j.Theme) { $cfg.Theme = $j.Theme }; if ($j.Zoom) { $cfg.Zoom = [double]$j.Zoom }; $cfg.AutoScan = [bool]$j.AutoScan } catch { }
 if ($Theme) { $cfg.Theme = $Theme }
 if ($Shot) { $cfg.Zoom = 1.0 }
 function Save-Cfg { try { New-Item -ItemType Directory (Split-Path $cfgFile) -Force | Out-Null; $cfg | ConvertTo-Json | Set-Content $cfgFile } catch { } }
@@ -694,6 +700,8 @@ if (-not $themes.Contains($cfg.Theme)) { $cfg.Theme = 'Light' }
 
     <DockPanel Grid.Row="0" Margin="0,0,0,8">
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+        <CheckBox x:Name="AutoScan" Content="Scan on start" VerticalAlignment="Center" Margin="0,0,12,0" Foreground="{DynamicResource Fg}"
+          ToolTip="Map the drive automatically every time DiskTidy opens. Off by default: a full scan is heavy."/>
         <Button x:Name="ThemeBtn" ToolTip="Switch colour theme. Ctrl + mouse wheel zooms the whole window, Ctrl+0 resets."/>
         <Button x:Name="ShortcutBtn" Content="Desktop shortcut" Margin="6,0,0,0"/>
       </StackPanel>
@@ -862,7 +870,7 @@ if (-not $themes.Contains($cfg.Theme)) { $cfg.Theme = 'Light' }
 </Window>
 '@
 $win = [Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
-foreach ($n in 'RootGrid','Zoom','Crumbs','Root','Drives','ScanBtn','UpBtn','TopBtn','ScanInfo','PathText','Map','Kids','HoverText','Legend','Clean','CleanBtn','AdminBtn',
+foreach ($n in 'RootGrid','Zoom','Crumbs','AutoScan','Root','Drives','ScanBtn','UpBtn','TopBtn','ScanInfo','PathText','Map','Kids','HoverText','Legend','Clean','CleanBtn','AdminBtn',
   'WinCleanBtn','Selected','Tabs','RamTab','DrivesTab','DrivesRefresh','DiskMgmtBtn','ToolBtns','DrivesInfo','DriveList','TrimBtn','StandbyBtn','RamRefresh','RamInfo','Procs','ThemeBtn','ShortcutBtn') { Set-Variable $n $win.FindName($n) }
 
 $bc = New-Object Windows.Media.BrushConverter
@@ -1272,8 +1280,12 @@ $HoverText.Text = Describe $null
 $Clean.ItemsSource = $items
 $Root.Text = $ScanPath
 $script:shotTicks = 0
+$AutoScan.IsChecked = $cfg.AutoScan
+$AutoScan.add_Click({ $cfg.AutoScan = [bool]$AutoScan.IsChecked; Save-Cfg })
 if ($Tab) { foreach ($ti in $Tabs.Items) { if ("$($ti.Header)" -like "$Tab*") { $Tabs.SelectedItem = $ti } } }
-$win.add_ContentRendered({ $script:measure = [DiskTidy.Cleaner]::MeasureAll($items); Start-Scan })
+$win.add_ContentRendered({
+  $script:measure = [DiskTidy.Cleaner]::MeasureAll($items)
+  if ($Shot -or $cfg.AutoScan) { Start-Scan } else { $PathText.Text = 'Nothing scanned yet: pick a drive or type a folder, then press Scan.' } }) # no auto-scan: a full drive scan is heavy
 $timer.Start()
 [void]$win.ShowDialog()
 [DiskTidy.Scanner]::Cancel = $true

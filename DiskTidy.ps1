@@ -527,7 +527,8 @@ function Save-Cfg { try { New-Item -ItemType Directory (Split-Path $cfgFile) -Fo
 $L = $env:LOCALAPPDATA; $A = $env:APPDATA; $U = $env:USERPROFILE
 $items = New-Object 'System.Collections.Generic.List[DiskTidy.CleanItem]'
 function Item($name, $safety, $paths, $explain, [double]$age = 0, [switch]$admin, [string[]]$keep = @(), [string[]]$notes = @()) {
-  $p = @(foreach ($x in $paths) { Get-Item -Path $x -Force -ErrorAction SilentlyContinue | ForEach-Object FullName })
+  $p = if ($Shot) { @($paths | ForEach-Object { $_.Replace($env:USERPROFILE, 'C:\Users\you') }) } # screenshots: generic paths, nothing checked on this PC
+       else { @(foreach ($x in $paths) { Get-Item -Path $x -Force -ErrorAction SilentlyContinue | ForEach-Object FullName }) }
   if (-not $p) { return }
   $perPath = @($paths).Count -gt 1 -or (@($paths) -match '\*').Count -gt 0
   $i = New-Object DiskTidy.CleanItem -Property @{ Name = $name; Safety = $safety; Paths = [string[]]$p; PerPath = $perPath; Explanation = $explain
@@ -571,6 +572,61 @@ Item 'Adobe media cache' Caution "$A\Adobe\Common\Media Cache Files", "$A\Adobe\
 Item 'chrome-devtools-mcp browser' Caution "$U\.cache\chrome-devtools-mcp" 'A Chrome copy the chrome-devtools MCP tool downloaded. It downloads it again (a few hundred MB) next time it runs.'
 Item 'Hugging Face models' Caution "$U\.cache\huggingface" 'AI models downloaded by Python tools (Whisper, transformers and so on). Harmless to delete, but each tool downloads its model again, which can be gigabytes.'
 
+if ($Shot) { # README screenshot: a typical PC's numbers instead of this one's (and no list of what is installed here)
+  $demo = [ordered]@{ 'Your Temp folder' = 6.8GB; 'Windows Temp' = 410MB; 'Crash dumps' = 1.2GB; 'npm cache' = 2.9GB; 'pip and uv caches' = 870MB
+    'GPU shader caches' = 640MB; 'Chrome cache' = 1.1GB; 'Desktop app caches' = 920MB; 'Windows Update downloads' = 3.4GB; 'Hugging Face models' = 4.6GB }
+  $keepItems = @($items | Where-Object { $demo.Contains($_.Name) }); $items.Clear()
+  foreach ($i in $keepItems) { $i.Size = [long]$demo[$i.Name]; $items.Add($i) }
+  function DemoSub($name, $size, $note, $checked = $true) {
+    $s = New-Object DiskTidy.SubItem -Property @{ Name = $name; Size = [long]$size; Note = $note; Kind = 'Folder'; Paths = [string[]]@('x'); Key = $name }; $s.Checked = $checked; $s }
+  $items[0].Subs = [Collections.Generic.List[DiskTidy.SubItem]]@(
+    (DemoSub 'remotion-v4.0-assets*   (48 similar folders)' 2.1GB 'Remotion render leftovers'),
+    (DemoSub 'claude\' 1.9GB 'Claude Code session files (tool outputs, scratchpads of sessions you may reopen). Kept unless you tick it.' $false),
+    (DemoSub '[812 loose files]' 1.3GB ''), (DemoSub 'pip-unpack-*   (17 similar folders)' 690MB ''),
+    (DemoSub 'chrome-devtools-mcp-profile\' 520MB 'chrome-devtools MCP scratch'), (DemoSub 'NVIDIA Corporation\' 310MB ''))
+}
+# Made-up drive for README screenshots: looks like a typical PC, contains nothing from this one.
+function New-MockDrive {
+  $rnd = New-Object Random 7
+  function MockDir($parent, $name) {
+    $n = New-Object DiskTidy.Node; $n.Name = $name; $n.IsDir = $true; $n.Parent = $parent
+    $n.Path = if ($parent) { Join-Path $parent.Path $name } else { $name }; if ($parent) { $parent.Kids.Add($n) }; $n }
+  function MockFiles($d, $count, $exts, $prefix, $min, $max) {
+    for ($i = 1; $i -le $count; $i++) {
+      $f = New-Object DiskTidy.Node; $f.Name = '{0}_{1:000}.{2}' -f $prefix, $i, $exts[$rnd.Next($exts.Count)]; $f.Parent = $d; $f.Path = Join-Path $d.Path $f.Name
+      $f.Size = [long]($min + [math]::Pow($rnd.NextDouble(), 2) * ($max - $min)); $f.Files = $rnd.Next(200, 900); $d.Kids.Add($f) } } # each block stands for many real files
+  function MockPath($from, $rel) { $n = $from
+    foreach ($s in $rel -split '\\') { $e = $null; foreach ($k in $n.Kids) { if ($k.IsDir -and $k.Name -eq $s) { $e = $k; break } }; $n = if ($e) { $e } else { MockDir $n $s } }; $n }
+  $root = MockDir $null 'C:\'
+  $u = MockPath $root 'Users\you'; $loc = MockPath $u 'AppData\Local'
+  $tmp = MockDir $loc 'Temp'; MockFiles $tmp 70 @('tmp', 'log', 'bin') 'tmp' 200KB 60MB
+  foreach ($k in 1..14) { MockFiles (MockDir $tmp "remotion-v4.0-assets$k") 6 @('png', 'mp4') 'frame' 5MB 70MB }
+  MockFiles (MockDir $tmp 'claude') 40 @('json', 'txt') 'session' 1MB 40MB
+  MockFiles (MockPath $loc 'npm-cache\_cacache') 140 @('tgz') 'pkg' 100KB 9MB
+  MockFiles (MockPath $loc 'Google\Chrome\User Data\Default\Cache') 90 @('bin') 'cache' 100KB 4MB
+  MockFiles (MockPath $loc 'NVIDIA\DXCache') 50 @('bin') 'shader' 1MB 20MB
+  MockFiles (MockDir $u 'Videos') 16 @('mp4', 'mkv', 'mov') 'recording' 300MB 4GB
+  MockFiles (MockDir $u 'Pictures') 160 @('jpg', 'png', 'heic') 'IMG' 2MB 14MB
+  MockFiles (MockDir $u 'Music') 120 @('mp3', 'flac') 'track' 4MB 40MB
+  MockFiles (MockDir $u 'Documents') 60 @('pdf', 'docx', 'xlsx', 'zip') 'doc' 100KB 80MB
+  MockFiles (MockDir $u 'Downloads') 40 @('zip', 'exe', 'iso', 'msi') 'download' 5MB 900MB
+  foreach ($p in 'web-shop', 'game-mod', 'notes-app', 'api-server') {
+    $pr = MockPath $u "Projects\$p"; MockFiles (MockDir $pr 'node_modules') 90 @('js', 'node', 'map') 'module' 30KB 3MB; MockFiles (MockDir $pr 'src') 40 @('ts', 'js', 'json') 'src' 5KB 400KB }
+  MockFiles (MockPath $u '.cache\huggingface') 6 @('safetensors', 'gguf') 'model' 400MB 3GB
+  $w = MockDir $root 'Windows'; MockFiles (MockDir $w 'System32') 320 @('dll', 'exe', 'sys') 'sys' 100KB 30MB
+  foreach ($k in 1..30) { MockFiles (MockDir (MockDir $w 'WinSxS') "amd64_component_$k") 10 @('dll', 'cat') 'part' 50KB 8MB }
+  MockFiles (MockDir $w 'Installer') 30 @('msi', 'cab') 'setup' 10MB 300MB
+  MockFiles (MockPath $root 'Program Files\Games\Starfall') 20 @('pak') 'data' 800MB 6GB
+  MockFiles (MockPath $root 'Program Files\Adobe') 80 @('dll', 'exe') 'adobe' 1MB 60MB
+  MockFiles (MockPath $root 'Program Files\NVIDIA Corporation') 50 @('dll', 'exe') 'nv' 1MB 50MB
+  foreach ($f in @(@('pagefile.sys', 16GB), @('hiberfil.sys', 12.7GB))) { $n = New-Object DiskTidy.Node; $n.Name = $f[0]; $n.Size = [long]$f[1]; $n.Files = 1; $n.Parent = $root; $n.Path = "C:\$($f[0])"; $root.Kids.Add($n) }
+  function Total($n) {
+    if (-not $n.IsDir) { return }
+    foreach ($k in $n.Kids) { Total $k }
+    $n.Size = 0; $n.Files = 0; foreach ($k in $n.Kids) { $n.Size += $k.Size; $n.Files += $k.Files }
+    $sorted = @($n.Kids | Sort-Object Size -Descending); $n.Kids.Clear(); foreach ($k in $sorted) { $n.Kids.Add($k) } }
+  Total $root; $root
+}
 $cleanPaths = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 foreach ($i in $items) { foreach ($p in $i.Paths) { [void]$cleanPaths.Add($p) } }
 
@@ -1260,6 +1316,7 @@ $win.add_PreviewMouseUp({ param($s, $e)
 # Fit the window to the screen (it was cut off on laptops with display scaling).
 $wa = [Windows.SystemParameters]::WorkArea
 $win.Width = [math]::Min(1320, $wa.Width * 0.94); $win.Height = [math]::Min(980, $wa.Height * 0.94)
+if ($Shot) { $win.Width = 1320; $win.Height = 1000; $PanelRow.Height = New-Object Windows.GridLength 1.5, 'Star' } # same-size README pictures on any screen
 $win.WindowStartupLocation = 'CenterScreen'
 $ico = Join-Path $PSScriptRoot 'DiskTidy.ico'
 if (Test-Path $ico) { $win.Icon = [Windows.Media.Imaging.BitmapFrame]::Create([Uri]$ico) }
@@ -1299,16 +1356,23 @@ $timer.add_Tick({
     $j.PS.Dispose()
   }
   if ($script:needDraw) { $script:needDraw = $false; Draw }
-  $sum = 0; foreach ($i in $items) { $sum += $i.SelectedSize }
+  $sum = 0; foreach ($i in $items) { $sum += if ($Shot -and -not $i.HasSubs) { if ($i.Checked -and $i.Enabled) { $i.Size } else { 0 } } else { $i.SelectedSize } }
   $Selected.Text = "Selected: $(Fmt $sum)"
   if ($Shot -and -not $script:scanTask -and $script:top -and $script:measure.IsCompleted -and ($Tab -ne 'Drives' -or $script:drivesLoaded)) {
     $script:shotTicks++
+    if ($script:shotTicks -eq 2) { # open the first "Choose what to delete" list so the picture shows it
+      $stack = New-Object Collections.Stack; $stack.Push($Clean)
+      while ($stack.Count) { $v = $stack.Pop(); if ($v -is [Windows.Controls.Expander]) { $v.IsExpanded = $true; break }
+        for ($k = [Windows.Media.VisualTreeHelper]::GetChildrenCount($v) - 1; $k -ge 0; $k--) { $stack.Push([Windows.Media.VisualTreeHelper]::GetChild($v, $k)) } }
+    }
     if ($script:shotTicks -eq 4) { # let the layout settle, then save a picture of the window for the README
       $c = $win.Content; $bmp = New-Object Windows.Media.Imaging.RenderTargetBitmap ([int]$c.ActualWidth + 24), ([int]$c.ActualHeight + 24), 96, 96, ([Windows.Media.PixelFormats]::Pbgra32)
       $bg = New-Object Windows.Media.DrawingVisual; $dc = $bg.RenderOpen(); $dc.DrawRectangle($win.Background, $null, (New-Object Windows.Rect 0, 0, $bmp.PixelWidth, $bmp.PixelHeight)); $dc.Close()
       $bmp.Render($bg); $bmp.Render($c)
       $enc = New-Object Windows.Media.Imaging.PngBitmapEncoder; $enc.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($bmp))
-      $fs = [IO.File]::Create($Shot); $enc.Save($fs); $fs.Close(); $win.Close()
+      $fs = [IO.File]::Create($Shot); $enc.Save($fs); $fs.Close()
+      $Error | Select-Object -First 5 | ForEach-Object { [Console]::Error.WriteLine("$_ @ $($_.InvocationInfo.ScriptLineNumber)") } # surface UI errors when run headless
+      $win.Close()
     }
   }
 })
@@ -1334,8 +1398,12 @@ if (-not $Shot) {
 }
 $win.add_ContentRendered({
   if (-not $Shot -and $cfg.Scroll -gt 0) { $CleanScroll.ScrollToVerticalOffset($cfg.Scroll) }
-  $script:measure = [DiskTidy.Cleaner]::MeasureAll($items)
-  if ($Shot -or $cfg.AutoScan) { Start-Scan } else { $PathText.Text = 'Nothing scanned yet: pick a drive or type a folder, then press Scan.' } }) # no auto-scan: a full drive scan is heavy
+  $script:measure = if ($Shot) { [Threading.Tasks.Task]::FromResult(0) } else { [DiskTidy.Cleaner]::MeasureAll($items) }
+  if ($Shot) {
+    $m = New-MockDrive; $script:top = $m; $Root.Text = 'C:\'
+    foreach ($b in $Drives.Children) { $b.Style = $win.FindResource('Primary') }
+    $ScanInfo.Text = "{0:N0} files, {1} in 6s" -f $m.Files, (Fmt $m.Size); Navigate $m; $script:needDraw = $true
+  } elseif ($cfg.AutoScan) { Start-Scan } else { $PathText.Text = 'Nothing scanned yet: pick a drive or type a folder, then press Scan.' } }) # no auto-scan: a full drive scan is heavy
 $timer.Start()
 [void]$win.ShowDialog()
 [DiskTidy.Scanner]::Cancel = $true

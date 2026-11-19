@@ -611,6 +611,27 @@ if (-not $themes.Contains($cfg.Theme)) { $cfg.Theme = 'Light' }
         </ControlTemplate>
       </Setter.Value></Setter>
     </Style>
+    <Style TargetType="ToggleButton">
+      <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+      <Setter Property="Background" Value="{DynamicResource Btn}"/>
+      <Setter Property="Padding" Value="12,5"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template"><Setter.Value>
+        <ControlTemplate TargetType="ToggleButton">
+          <Border x:Name="B" Background="{TemplateBinding Background}" CornerRadius="5" Padding="{TemplateBinding Padding}" BorderBrush="{DynamicResource Line}" BorderThickness="1">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="B" Property="Opacity" Value="0.82"/></Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value></Setter>
+      <Style.Triggers>
+        <Trigger Property="IsChecked" Value="True">
+          <Setter Property="Background" Value="{DynamicResource Accent}"/><Setter Property="Foreground" Value="White"/><Setter Property="FontWeight" Value="SemiBold"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
     <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
       <Setter Property="Background" Value="{DynamicResource Accent}"/>
       <Setter Property="Foreground" Value="White"/>
@@ -702,7 +723,7 @@ if (-not $themes.Contains($cfg.Theme)) { $cfg.Theme = 'Light' }
 
     <DockPanel Grid.Row="0" Margin="0,0,0,8">
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-        <CheckBox x:Name="AutoScan" Content="Scan on start" VerticalAlignment="Center" Margin="0,0,12,0" Foreground="{DynamicResource Fg}"
+        <ToggleButton x:Name="AutoScan" Content="Scan on start" Margin="0,0,6,0"
           ToolTip="Map the drive automatically every time DiskTidy opens. Off by default: a full scan is heavy."/>
         <Button x:Name="ThemeBtn" ToolTip="Switch colour theme. Ctrl + mouse wheel zooms the whole window, Ctrl+0 resets."/>
         <Button x:Name="ShortcutBtn" Content="Desktop shortcut" Margin="6,0,0,0"/>
@@ -721,10 +742,6 @@ if (-not $themes.Contains($cfg.Theme)) { $cfg.Theme = 'Light' }
     </DockPanel>
 
     <DockPanel Grid.Row="2">
-      <StackPanel DockPanel.Dock="Bottom" Margin="0,6,0,0">
-        <TextBlock x:Name="HoverText" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Fg}"/>
-        <WrapPanel x:Name="Legend" Margin="0,4,0,0"/>
-      </StackPanel>
       <Grid>
         <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="200"/><ColumnDefinition Width="10"/><ColumnDefinition x:Name="ListCol" Width="320" MinWidth="120"/></Grid.ColumnDefinitions>
         <Border BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="4">
@@ -745,7 +762,12 @@ if (-not $themes.Contains($cfg.Theme)) { $cfg.Theme = 'Light' }
       </ControlTemplate></GridSplitter.Template>
     </GridSplitter>
 
-    <TabControl Grid.Row="4" x:Name="Tabs" Padding="8">
+    <DockPanel Grid.Row="4">
+    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+      <TextBlock x:Name="HoverText" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Fg}"/>
+      <WrapPanel x:Name="Legend" Margin="0,4,0,0"/>
+    </StackPanel>
+    <TabControl x:Name="Tabs" Padding="8">
       <TabItem Header="Disk cleanup">
         <DockPanel>
           <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
@@ -868,6 +890,7 @@ if (-not $themes.Contains($cfg.Theme)) { $cfg.Theme = 'Light' }
         </DockPanel>
       </TabItem>
     </TabControl>
+    </DockPanel>
   </Grid>
 </Window>
 '@
@@ -1297,7 +1320,9 @@ $Clean.ItemsSource = $items
 $Root.Text = $ScanPath
 $script:shotTicks = 0
 $AutoScan.IsChecked = $cfg.AutoScan
-$AutoScan.add_Click({ $cfg.AutoScan = [bool]$AutoScan.IsChecked; Save-Cfg })
+function AutoScan-Label { $AutoScan.Content = if ($AutoScan.IsChecked) { 'Scan on start: ON' } else { 'Scan on start: OFF' } }
+AutoScan-Label
+$AutoScan.add_Click({ $cfg.AutoScan = [bool]$AutoScan.IsChecked; AutoScan-Label; Save-Cfg })
 if ($Tab) { foreach ($ti in $Tabs.Items) { if ("$($ti.Header)" -like "$Tab*") { $Tabs.SelectedItem = $ti } } }
 # Remember splitter sizes and the cleanup list's scroll position between launches (not in screenshot mode, so README shots stay the same).
 if (-not $Shot) {

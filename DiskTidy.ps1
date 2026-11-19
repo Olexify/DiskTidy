@@ -461,6 +461,7 @@ if ($SelfTest) {
   if ($dr.Count -lt 1 -or -not $dr[0].Name -or $dr[0].Size -le 0) { throw 'drive list broken' }
   if (@(Drive-Warnings ([pscustomobject]@{ Health = 'Warning'; Status = 'Predictive Failure'; Wear = 91; ReadErr = 2; WriteErr = 0; Temp = 75 })).Count -ne 4) { throw 'drive warnings broken' }
   if (@(Drive-Warnings ([pscustomobject]@{ Health = 'Healthy'; Wear = 3; ReadErr = 0; WriteErr = 0; Temp = 40 })).Count -ne 0) { throw 'false drive warning' }
+  if ([math]::Min(1.0, 518 / 930) -ge 0.9) { throw 'usage bar maths' }
   $v = [double[]](6, 6, 4, 3, 2, 2, 1)
   $r = [DiskTidy.Treemap]::Layout($v, 0, 0, 6, 4)
   for ($i = 0; $i -lt $v.Count; $i++) {
@@ -515,8 +516,9 @@ $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIden
 
 # ---------- settings ----------
 $cfgFile = Join-Path $env:APPDATA 'DiskTidy\settings.json'
-$cfg = @{ Theme = 'Light'; Zoom = 1.0; AutoScan = $false }
-try { $j = Get-Content $cfgFile -Raw | ConvertFrom-Json; if ($j.Theme) { $cfg.Theme = $j.Theme }; if ($j.Zoom) { $cfg.Zoom = [double]$j.Zoom }; $cfg.AutoScan = [bool]$j.AutoScan } catch { }
+$cfg = @{ Theme = 'Light'; Zoom = 1.0; AutoScan = $false; MapH = 0; PanelH = 0; ListW = 0; Scroll = 0 }
+try { $j = Get-Content $cfgFile -Raw | ConvertFrom-Json; if ($j.Theme) { $cfg.Theme = $j.Theme }; if ($j.Zoom) { $cfg.Zoom = [double]$j.Zoom }; $cfg.AutoScan = [bool]$j.AutoScan
+  foreach ($k in 'MapH', 'PanelH', 'ListW', 'Scroll') { if ($j.$k) { $cfg[$k] = [double]$j.$k } } } catch { }
 if ($Theme) { $cfg.Theme = $Theme }
 if ($Shot) { $cfg.Zoom = 1.0 }
 function Save-Cfg { try { New-Item -ItemType Directory (Split-Path $cfgFile) -Force | Out-Null; $cfg | ConvertTo-Json | Set-Content $cfgFile } catch { } }
@@ -754,7 +756,7 @@ if (-not $themes.Contains($cfg.Theme)) { $cfg.Theme = 'Light' }
           </DockPanel>
           <TextBlock DockPanel.Dock="Top" Foreground="{DynamicResource Muted}" Margin="2,0,0,6" TextWrapping="Wrap"
             Text="Never touched: Downloads, Recycle Bin, Documents, Desktop, your projects, Docker, app settings. Right-click any line to open it in Explorer or find it in the disk map."/>
-          <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <ScrollViewer x:Name="CleanScroll" VerticalScrollBarVisibility="Auto">
             <ItemsControl x:Name="Clean">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
@@ -870,7 +872,7 @@ if (-not $themes.Contains($cfg.Theme)) { $cfg.Theme = 'Light' }
 </Window>
 '@
 $win = [Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
-foreach ($n in 'RootGrid','Zoom','Crumbs','AutoScan','Root','Drives','ScanBtn','UpBtn','TopBtn','ScanInfo','PathText','Map','Kids','HoverText','Legend','Clean','CleanBtn','AdminBtn',
+foreach ($n in 'RootGrid','Zoom','Crumbs','AutoScan','MapRow','PanelRow','ListCol','CleanScroll','Root','Drives','ScanBtn','UpBtn','TopBtn','ScanInfo','PathText','Map','Kids','HoverText','Legend','Clean','CleanBtn','AdminBtn',
   'WinCleanBtn','Selected','Tabs','RamTab','DrivesTab','DrivesRefresh','DiskMgmtBtn','ToolBtns','DrivesInfo','DriveList','TrimBtn','StandbyBtn','RamRefresh','RamInfo','Procs','ThemeBtn','ShortcutBtn') { Set-Variable $n $win.FindName($n) }
 
 $bc = New-Object Windows.Media.BrushConverter
@@ -1055,7 +1057,7 @@ $TopBtn.add_Click({ if ($script:top) { Navigate $script:top; Select-Node $null }
 $ScanBtn.add_Click({ if ($script:scanTask) { [DiskTidy.Scanner]::Cancel = $true } else { Start-Scan } })
 $Root.add_KeyDown({ param($s, $e) if ($e.Key -eq 'Return' -and -not $script:scanTask) { Start-Scan } })
 foreach ($d in [IO.DriveInfo]::GetDrives()) {
-  if ($d.DriveType -ne 'Fixed' -or -not $d.IsReady) { continue }
+  if ($d.DriveType -ne 'Fixed' -or -not $d.IsReady -or ($Shot -and $d.Name -ne 'C:\')) { continue } # screenshots: no hint of your other drives
   $btn = New-Object Windows.Controls.Button -Property @{ Content = $d.Name.TrimEnd('\'); Tag = $d.Name; Margin = '0,0,4,0'; Padding = '8,5'
     ToolTip = "$($d.Name)  $(Fmt $d.AvailableFreeSpace) free of $(Fmt $d.TotalSize)" }
   $btn.add_Click({ param($s, $e) if (-not $script:scanTask) { $Root.Text = $s.Tag; Start-Scan } })
@@ -1119,6 +1121,16 @@ $Tabs.add_SelectionChanged({ param($s, $e)
 $script:driveJob = $null; $script:drivesLoaded = $false
 function Start-Drives {
   if ($script:driveJob) { return }
+  if ($Shot) { # screenshots for the README use made-up drives, never the real ones
+    $ToolBtns.Children.Clear()
+    Show-Drives @(
+      [pscustomobject]@{ Number = 0; Name = 'NVMe SSD 1TB'; Media = 'SSD'; Bus = 'NVMe'; Size = 1TB; Health = 'Healthy'; Status = 'OK'; HasRc = $true; Temp = 41; TempMax = 70; Wear = 3; Hours = 5210; ReadErr = 0; WriteErr = 0
+        Parts = @([pscustomobject]@{ Letter = ''; Type = 'System'; Size = 100MB; Free = -1 }, [pscustomobject]@{ Letter = 'C:'; Type = 'Basic'; Size = 930GB; Free = 412GB; Label = 'Windows'; FS = 'NTFS'; IsBoot = $true },
+                  [pscustomobject]@{ Letter = ''; Type = 'Recovery'; Size = 750MB; Free = -1 }) }
+      [pscustomobject]@{ Number = 1; Name = 'SATA HDD 2TB'; Media = 'HDD'; Bus = 'SATA'; Size = 2TB; Health = 'Warning'; Status = 'Predictive Failure'; HasRc = $true; Temp = 46; TempMax = 60; Wear = $null; Hours = 31870; ReadErr = 12; WriteErr = 0
+        Parts = @([pscustomobject]@{ Letter = 'D:'; Type = 'Basic'; Size = 1.8TB; Free = 610GB; Label = 'Data'; FS = 'NTFS'; IsBoot = $false }) })
+    $script:drivesLoaded = $true; return
+  }
   $DrivesInfo.Text = 'Reading drives...'
   $ps = [powershell]::Create(); [void]$ps.AddScript($collectDrives.ToString())
   $script:driveJob = @{ PS = $ps; Async = $ps.BeginInvoke() }
@@ -1130,7 +1142,7 @@ function TB($text, $size = 13, $weight = 'Normal', $res = 'Fg', $margin = '0') {
 function Usage-Bar($used, $total) {
   $g = New-Object Windows.Controls.Grid -Property @{ Width = 160; Height = 8; Margin = '10,0'; VerticalAlignment = 'Center' }
   $bg = New-Object Windows.Controls.Border -Property @{ CornerRadius = 4 }; $bg.SetResourceReference([Windows.Controls.Border]::BackgroundProperty, 'Line')
-  $pct = if ($total -gt 0) { [math]::Min(1, $used / $total) } else { 0 }
+  $pct = if ($total -gt 0) { [math]::Min(1.0, $used / $total) } else { 0 } # 1.0, not 1: the int overload rounds 0.56 up to 1
   $fg = New-Object Windows.Controls.Border -Property @{ CornerRadius = 4; HorizontalAlignment = 'Left'; Width = 160 * $pct }
   if ($pct -ge 0.9) { $fg.Background = B '#d9534f' } else { $fg.SetResourceReference([Windows.Controls.Border]::BackgroundProperty, 'Accent') }
   [void]$g.Children.Add($bg); [void]$g.Children.Add($fg); $g
@@ -1244,7 +1256,7 @@ $timer.add_Tick({
       $t = $script:scanTask; $script:scanTask = $null; $ScanBtn.Content = 'Scan'
       try { $root = $t.Result; $script:top = $root
         $ScanInfo.Text = "{0:N0} files, {1} in {2:0}s{3}" -f $root.Files, (Fmt $root.Size), ((Get-Date) - $script:scanStart).TotalSeconds, $(if ([DiskTidy.Scanner]::Cancel) { ' (stopped early)' })
-        try { $d = [IO.DriveInfo]::new($root.Path.Substring(0, 3)); $ScanInfo.Text += "    |    $($d.Name) free: $(Fmt $d.AvailableFreeSpace) of $(Fmt $d.TotalSize)" } catch { }
+        if (-not $Shot) { try { $d = [IO.DriveInfo]::new($root.Path.Substring(0, 3)); $ScanInfo.Text +="    |    $($d.Name) free: $(Fmt $d.AvailableFreeSpace) of $(Fmt $d.TotalSize)" } catch { } }
         $script:sel = $null; Navigate $root; $HoverText.Text = Describe $null } catch { $ScanInfo.Text = "Scan failed: $($_.Exception.InnerException.Message)" }
     } else { $ScanInfo.Text = "Scanning...  {0:N0} files, {1}" -f [DiskTidy.Scanner]::Files, (Fmt ([DiskTidy.Scanner]::Bytes)) }
   }
@@ -1287,7 +1299,16 @@ $script:shotTicks = 0
 $AutoScan.IsChecked = $cfg.AutoScan
 $AutoScan.add_Click({ $cfg.AutoScan = [bool]$AutoScan.IsChecked; Save-Cfg })
 if ($Tab) { foreach ($ti in $Tabs.Items) { if ("$($ti.Header)" -like "$Tab*") { $Tabs.SelectedItem = $ti } } }
+# Remember splitter sizes and the cleanup list's scroll position between launches (not in screenshot mode, so README shots stay the same).
+if (-not $Shot) {
+  if ($cfg.MapH -gt 0 -and $cfg.PanelH -gt 0) { $MapRow.Height = New-Object Windows.GridLength $cfg.MapH, 'Star'; $PanelRow.Height = New-Object Windows.GridLength $cfg.PanelH, 'Star' }
+  if ($cfg.ListW -ge 120) { $ListCol.Width = New-Object Windows.GridLength $cfg.ListW }
+  $win.add_Closing({
+    $cfg.MapH = [math]::Round($MapRow.ActualHeight); $cfg.PanelH = [math]::Round($PanelRow.ActualHeight)
+    $cfg.ListW = [math]::Round($ListCol.ActualWidth); $cfg.Scroll = [math]::Round($CleanScroll.VerticalOffset); Save-Cfg })
+}
 $win.add_ContentRendered({
+  if (-not $Shot -and $cfg.Scroll -gt 0) { $CleanScroll.ScrollToVerticalOffset($cfg.Scroll) }
   $script:measure = [DiskTidy.Cleaner]::MeasureAll($items)
   if ($Shot -or $cfg.AutoScan) { Start-Scan } else { $PathText.Text = 'Nothing scanned yet: pick a drive or type a folder, then press Scan.' } }) # no auto-scan: a full drive scan is heavy
 $timer.Start()

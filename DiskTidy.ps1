@@ -1023,6 +1023,10 @@ function Start-Scan {
   $p = $Root.Text.Trim()
   if (-not (Test-Path -LiteralPath $p -PathType Container)) { [Windows.MessageBox]::Show("Folder not found: $p") | Out-Null; return }
   $p = (Get-Item -LiteralPath $p -Force).FullName
+  # Light up the drive button this scan belongs to (also for folders typed by hand).
+  foreach ($b in $Drives.Children) {
+    if ($p.StartsWith($b.Tag, [StringComparison]::OrdinalIgnoreCase)) { $b.Style = $win.FindResource('Primary') }
+    else { $b.ClearValue([Windows.FrameworkElement]::StyleProperty) } } # back to the themed default (Style = $null would drop the theme)
   $script:scanStart = Get-Date
   $script:scanTask = [DiskTidy.Scanner]::Start($p)
   $ScanBtn.Content = 'Stop'

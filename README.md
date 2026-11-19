@@ -24,6 +24,13 @@ A small Windows app that shows what fills your disk and cleans the junk safely. 
 - Trims the memory of the apps you pick, like Mem Reduct. Nothing closes and no data is lost. The app just reloads its memory when you switch back.
 - "Clear standby cache" drops cached file data from RAM. This one needs admin.
 
+**Drives** (read-only, it never writes to a disk)
+- Every physical disk with its health, temperature, SSD life used, power-on hours and uncorrected read/write errors. Temperature, life used and error counts need admin.
+- Plain-language warnings when a drive starts failing, such as "copy your files off now".
+- Partitions with free-space bars, including which one Windows runs from.
+- Buttons for Disk Management (shrink a volume, create a new one) and for any disk tools you already have installed (Samsung Magician, Data Migration, CrystalDiskInfo, Rescuezilla and others).
+- DiskTidy does not clone drives or resize partitions itself. Use a proven cloning tool for that.
+
 **Other features**
 - Four themes: Light, Dark, Midnight, Sand.
 - Ctrl + mouse wheel zooms the whole window, and Ctrl+0 resets it.

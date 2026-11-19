@@ -1,6 +1,6 @@
 # DiskTidy - disk map + safe cleanup + RAM trim. Built-in Windows only: PowerShell 5.1 + WPF + inline C#.
 # Run: DiskTidy.cmd    Self-check: powershell -File DiskTidy.ps1 -SelfTest
-param([switch]$SelfTest, [string]$ScanPath = 'C:\', [string]$Theme, [string]$Shot)
+param([switch]$SelfTest, [string]$ScanPath = 'C:\', [string]$Theme, [string]$Shot, [string]$Tab)
 $ErrorActionPreference = 'Stop'
 
 Add-Type @'
@@ -425,8 +425,36 @@ namespace DiskTidy {
 }
 '@
 
+# ---------- drive health (read-only; runs in a background runspace) ----------
+$collectDrives = {
+  foreach ($d in (Get-PhysicalDisk | Sort-Object { [int]$_.DeviceId })) {
+    $rc = try { $d | Get-StorageReliabilityCounter -ErrorAction Stop } catch { $null } # temperature/wear/errors: needs admin
+    $parts = foreach ($p in (Get-Partition -DiskNumber ([int]$d.DeviceId) -ErrorAction SilentlyContinue)) {
+      $v = if ($p.DriveLetter -and $p.DriveLetter -ne [char]0) { Get-Volume -DriveLetter $p.DriveLetter -ErrorAction SilentlyContinue }
+      [pscustomobject]@{ Letter = $(if ($v) { "$($p.DriveLetter):" } else { '' }); Type = [string]$p.Type; Size = [long]$p.Size
+        Free = $(if ($v) { [long]$v.SizeRemaining } else { -1 }); Label = $(if ($v) { $v.FileSystemLabel }); FS = $(if ($v) { $v.FileSystem }); IsBoot = [bool]$p.IsBoot }
+    }
+    [pscustomobject]@{ Number = [int]$d.DeviceId; Name = $d.FriendlyName; Media = [string]$d.MediaType; Bus = [string]$d.BusType; Size = [long]$d.Size
+      Health = [string]$d.HealthStatus; Status = ($d.OperationalStatus -join ', '); HasRc = [bool]$rc
+      Temp = $(if ($rc) { $rc.Temperature }); TempMax = $(if ($rc) { $rc.TemperatureMax }); Wear = $(if ($rc) { $rc.Wear }); Hours = $(if ($rc) { $rc.PowerOnHours })
+      ReadErr = $(if ($rc) { $rc.ReadErrorsUncorrected }); WriteErr = $(if ($rc) { $rc.WriteErrorsUncorrected }); Parts = @($parts) }
+  }
+}
+function Drive-Warnings($d) {
+  $w = @()
+  if ($d.Health -and $d.Health -ne 'Healthy') { $w += "Windows reports this drive as $($d.Health) ($($d.Status)). Copy your important files off it now, before anything else." }
+  if ($d.Wear -ge 80) { $w += "$($d.Wear)% of this SSD's rated life is used. Plan a replacement and keep backups." }
+  if ($d.ReadErr -gt 0 -or $d.WriteErr -gt 0) { $w += "The drive reported $($d.ReadErr) read and $($d.WriteErr) write errors it could not fix. That is an early sign of failure: back it up." }
+  if ($d.Temp -ge 70) { $w += "Running hot ($($d.Temp) C). Check airflow or the heatsink." }
+  $w
+}
+
 # ---------- self-check ----------
 if ($SelfTest) {
+  $dr = @(& $collectDrives)
+  if ($dr.Count -lt 1 -or -not $dr[0].Name -or $dr[0].Size -le 0) { throw 'drive list broken' }
+  if (@(Drive-Warnings ([pscustomobject]@{ Health = 'Warning'; Status = 'Predictive Failure'; Wear = 91; ReadErr = 2; WriteErr = 0; Temp = 75 })).Count -ne 4) { throw 'drive warnings broken' }
+  if (@(Drive-Warnings ([pscustomobject]@{ Health = 'Healthy'; Wear = 3; ReadErr = 0; WriteErr = 0; Temp = 40 })).Count -ne 0) { throw 'false drive warning' }
   $v = [double[]](6, 6, 4, 3, 2, 2, 1)
   $r = [DiskTidy.Treemap]::Layout($v, 0, 0, 6, 4)
   for ($i = 0; $i -lt $v.Count; $i++) {
@@ -780,6 +808,20 @@ if (-not $themes.Contains($cfg.Theme)) { $cfg.Theme = 'Light' }
         </DockPanel>
       </TabItem>
 
+      <TabItem x:Name="DrivesTab" Header="Drives">
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Margin="2,0,2,8"
+            Text="Read-only: this tab never writes to a disk. It shows each drive's health as the drive itself reports it and warns early when one starts failing. To move Windows to a new SSD, use a cloning tool (Samsung Data Migration for Samsung drives, or Rescuezilla). To make room for a new volume without losing data, use Disk Management: right-click a volume, Shrink Volume, then New Simple Volume."/>
+          <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+            <Button x:Name="DrivesRefresh" Content="Refresh" Style="{StaticResource Primary}"/>
+            <Button x:Name="DiskMgmtBtn" Content="Disk Management..." Margin="8,0,0,0" ToolTip="Windows' own tool: shrink a volume, create a new one, change drive letters."/>
+            <StackPanel x:Name="ToolBtns" Orientation="Horizontal"/>
+            <TextBlock x:Name="DrivesInfo" VerticalAlignment="Center" Margin="14,0" Foreground="{DynamicResource Muted}" TextWrapping="Wrap"/>
+          </DockPanel>
+          <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel x:Name="DriveList"/></ScrollViewer>
+        </DockPanel>
+      </TabItem>
+
       <TabItem x:Name="RamTab" Header="RAM cleanup">
         <DockPanel>
           <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Margin="2,0,2,8"
@@ -810,7 +852,7 @@ if (-not $themes.Contains($cfg.Theme)) { $cfg.Theme = 'Light' }
 '@
 $win = [Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
 foreach ($n in 'RootGrid','Zoom','Crumbs','Root','Drives','ScanBtn','UpBtn','TopBtn','ScanInfo','PathText','Map','Kids','HoverText','Legend','Clean','CleanBtn','AdminBtn',
-  'WinCleanBtn','Selected','Tabs','RamTab','TrimBtn','StandbyBtn','RamRefresh','RamInfo','Procs','ThemeBtn','ShortcutBtn') { Set-Variable $n $win.FindName($n) }
+  'WinCleanBtn','Selected','Tabs','RamTab','DrivesTab','DrivesRefresh','DiskMgmtBtn','ToolBtns','DrivesInfo','DriveList','TrimBtn','StandbyBtn','RamRefresh','RamInfo','Procs','ThemeBtn','ShortcutBtn') { Set-Variable $n $win.FindName($n) }
 
 $bc = New-Object Windows.Media.BrushConverter
 function B($c) { $bc.ConvertFromString($c) }
@@ -1045,7 +1087,86 @@ function Refresh-Ram {
   $Procs.ItemsSource = $list
 }
 function Ram-Text { $t = [DiskTidy.Ram]::Total(); $a = [DiskTidy.Ram]::Avail(); "RAM in use: $(Fmt ($t - $a)) of $(Fmt $t)   ($(Fmt $a) available)" }
-$Tabs.add_SelectionChanged({ param($s, $e) if ($e.OriginalSource -eq $Tabs -and $Tabs.SelectedItem -eq $RamTab) { Refresh-Ram } })
+$Tabs.add_SelectionChanged({ param($s, $e)
+  if ($e.OriginalSource -ne $Tabs) { return }
+  if ($Tabs.SelectedItem -eq $RamTab) { Refresh-Ram }
+  if ($Tabs.SelectedItem -eq $DrivesTab -and -not $script:drivesLoaded) { Start-Drives } })
+
+# ---------- Drives ----------
+$script:driveJob = $null; $script:drivesLoaded = $false
+function Start-Drives {
+  if ($script:driveJob) { return }
+  $DrivesInfo.Text = 'Reading drives...'
+  $ps = [powershell]::Create(); [void]$ps.AddScript($collectDrives.ToString())
+  $script:driveJob = @{ PS = $ps; Async = $ps.BeginInvoke() }
+}
+function TB($text, $size = 13, $weight = 'Normal', $res = 'Fg', $margin = '0') {
+  $t = New-Object Windows.Controls.TextBlock -Property @{ Text = $text; FontSize = $size; FontWeight = $weight; Margin = $margin; TextWrapping = 'Wrap' }
+  $t.SetResourceReference([Windows.Controls.TextBlock]::ForegroundProperty, $res); $t
+}
+function Usage-Bar($used, $total) {
+  $g = New-Object Windows.Controls.Grid -Property @{ Width = 160; Height = 8; Margin = '10,0'; VerticalAlignment = 'Center' }
+  $bg = New-Object Windows.Controls.Border -Property @{ CornerRadius = 4 }; $bg.SetResourceReference([Windows.Controls.Border]::BackgroundProperty, 'Line')
+  $pct = if ($total -gt 0) { [math]::Min(1, $used / $total) } else { 0 }
+  $fg = New-Object Windows.Controls.Border -Property @{ CornerRadius = 4; HorizontalAlignment = 'Left'; Width = 160 * $pct }
+  if ($pct -ge 0.9) { $fg.Background = B '#d9534f' } else { $fg.SetResourceReference([Windows.Controls.Border]::BackgroundProperty, 'Accent') }
+  [void]$g.Children.Add($bg); [void]$g.Children.Add($fg); $g
+}
+$partNames = @{ System = 'EFI boot partition (Windows needs it to start)'; Reserved = 'Microsoft reserved (system use)'; Recovery = 'Windows recovery tools'; Unknown = 'Other / unknown partition' }
+function Show-Drives($list) {
+  $DriveList.Children.Clear()
+  foreach ($d in $list) {
+    $card = New-Object Windows.Controls.Border -Property @{ CornerRadius = 6; Padding = '14,10'; Margin = '0,0,0,10'; BorderThickness = 1 }
+    $card.SetResourceReference([Windows.Controls.Border]::BackgroundProperty, 'Bg'); $card.SetResourceReference([Windows.Controls.Border]::BorderBrushProperty, 'Line')
+    $sp = New-Object Windows.Controls.StackPanel; $card.Child = $sp
+    $head = New-Object Windows.Controls.WrapPanel
+    [void]$head.Children.Add((TB "Disk $($d.Number):  $($d.Name)" 15 'SemiBold'))
+    $ok = $d.Health -eq 'Healthy'
+    $badge = New-Object Windows.Controls.Border -Property @{ CornerRadius = 3; Padding = '6,1'; Margin = '10,2,0,0'; VerticalAlignment = 'Top'
+      Background = (B $(if ($ok) { '#d8f0dd' } elseif ($d.Health -eq 'Warning') { '#fde7c8' } else { '#f8d0cf' }))
+      Child = (New-Object Windows.Controls.TextBlock -Property @{ Text = $(if ($d.Health) { $d.Health } else { 'Unknown' }); FontSize = 11
+        Foreground = (B $(if ($ok) { '#1d6b32' } elseif ($d.Health -eq 'Warning') { '#8a4b00' } else { '#8b1d1a' })) }) }
+    [void]$head.Children.Add($badge); [void]$sp.Children.Add($head)
+    [void]$sp.Children.Add((TB "$(Fmt $d.Size)   $($d.Media)   $($d.Bus)" 12 'Normal' 'Muted' '0,2,0,6'))
+    $m = if ($d.HasRc) {
+      $bits = @()
+      if ($null -ne $d.Temp -and $d.Temp -gt 0) { $bits += "Temperature $($d.Temp) C$(if ($d.TempMax) { " (rated max $($d.TempMax) C)" })" }
+      if ($null -ne $d.Wear) { $bits += "Life used $($d.Wear)%" }
+      if ($d.Hours) { $bits += "Powered on {0:N0} h" -f $d.Hours }
+      if ($null -ne $d.ReadErr -or $null -ne $d.WriteErr) { $bits += "Uncorrected errors: $([int]$d.ReadErr) read, $([int]$d.WriteErr) write" }
+      if ($bits) { $bits -join '    |    ' } else { 'The drive does not report temperature, wear or error counts.' }
+    } else { 'Temperature, life used and error counts need admin: use "Restart as admin" on the Disk cleanup tab.' }
+    [void]$sp.Children.Add((TB $m 12 'Normal' 'Fg' '0,0,0,6'))
+    foreach ($w in (Drive-Warnings $d)) { [void]$sp.Children.Add((TB "!  $w" 13 'SemiBold' 'Note' '0,0,0,4')) }
+    foreach ($p in $d.Parts) {
+      $row = New-Object Windows.Controls.DockPanel -Property @{ Margin = '12,3,0,0'; LastChildFill = $true }
+      $name = if ($p.Letter) { "$($p.Letter)  $(if ($p.Label) { $p.Label } else { 'Local Disk' })  ($($p.FS))$(if ($p.IsBoot) { '  - Windows runs from here' })" }
+              elseif ($partNames[$p.Type]) { $partNames[$p.Type] } else { "$($p.Type) partition" }
+      $left = TB $name 12 $(if ($p.Letter) { 'SemiBold' } else { 'Normal' }) $(if ($p.Letter) { 'Fg' } else { 'Muted' })
+      $left.Width = 360; $left.TextTrimming = 'CharacterEllipsis'; $left.TextWrapping = 'NoWrap'
+      [Windows.Controls.DockPanel]::SetDock($left, 'Left'); [void]$row.Children.Add($left)
+      if ($p.Free -ge 0) {
+        $bar = Usage-Bar ($p.Size - $p.Free) $p.Size; [Windows.Controls.DockPanel]::SetDock($bar, 'Left'); [void]$row.Children.Add($bar)
+        [void]$row.Children.Add((TB "$(Fmt $p.Free) free of $(Fmt $p.Size)" 12 'Normal' 'Muted'))
+      } else { [void]$row.Children.Add((TB (Fmt $p.Size) 12 'Normal' 'Muted')) }
+      [void]$sp.Children.Add($row)
+    }
+    [void]$DriveList.Children.Add($card)
+  }
+  $bad = @($list | Where-Object { @(Drive-Warnings $_).Count })
+  $DrivesInfo.Text = if ($bad) { "$($bad.Count) drive(s) need attention, see the warnings above." } else { "$(@($list).Count) drives, no problems reported. Checked $(Get-Date -Format 'HH:mm')." }
+}
+$DrivesRefresh.add_Click({ Start-Drives })
+$DiskMgmtBtn.add_Click({ Start-Process diskmgmt.msc })
+# Buttons for disk tools already installed (found by their Start menu shortcuts).
+$menus = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs", "$env:APPDATA\Microsoft\Windows\Start Menu\Programs"
+$seen = @{}
+foreach ($tool in 'Samsung Data Migration', 'Samsung Magician', 'Rescuezilla', 'Macrium Reflect', 'Hasleo Disk Clone', 'CrystalDiskInfo*', 'HDSentinel', 'Hard Disk Sentinel') {
+  $lnk = Get-ChildItem $menus -Recurse -Filter "$tool*.lnk" -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $lnk -or $seen[$lnk.BaseName]) { continue }; $seen[$lnk.BaseName] = 1
+  $b = New-Object Windows.Controls.Button -Property @{ Content = $lnk.BaseName; Tag = $lnk.FullName; Margin = '8,0,0,0'; ToolTip = "Open $($lnk.BaseName)" }
+  $b.add_Click({ param($s, $e) Start-Process $s.Tag }); [void]$ToolBtns.Children.Add($b)
+}
 $RamRefresh.add_Click({ Refresh-Ram })
 $TrimBtn.add_Click({
   if (-not @($Procs.ItemsSource | Where-Object Checked)) { [Windows.MessageBox]::Show('Tick the apps to trim first.', 'DiskTidy') | Out-Null; return }
@@ -1110,10 +1231,15 @@ $timer.add_Tick({
     $f = try { $t.Result } catch { 0 }
     Refresh-Ram; $RamInfo.Text = "Trimmed: about $(Fmt ([math]::Max(0, $f))) moved out of RAM.    " + (Ram-Text)
   } elseif ($Tabs.SelectedItem -eq $RamTab -and -not $script:trimTask -and $RamInfo.Text -notlike 'Trimmed*') { $RamInfo.Text = Ram-Text }
+  if ($script:driveJob -and $script:driveJob.Async.IsCompleted) {
+    $j = $script:driveJob; $script:driveJob = $null
+    try { Show-Drives @($j.PS.EndInvoke($j.Async)); $script:drivesLoaded = $true } catch { $DrivesInfo.Text = "Could not read drives: $($_.Exception.Message)" }
+    $j.PS.Dispose()
+  }
   if ($script:needDraw) { $script:needDraw = $false; Draw }
   $sum = 0; foreach ($i in $items) { $sum += $i.SelectedSize }
   $Selected.Text = "Selected: $(Fmt $sum)"
-  if ($Shot -and -not $script:scanTask -and $script:top -and $script:measure.IsCompleted) {
+  if ($Shot -and -not $script:scanTask -and $script:top -and $script:measure.IsCompleted -and ($Tab -ne 'Drives' -or $script:drivesLoaded)) {
     $script:shotTicks++
     if ($script:shotTicks -eq 4) { # let the layout settle, then save a picture of the window for the README
       $c = $win.Content; $bmp = New-Object Windows.Media.Imaging.RenderTargetBitmap ([int]$c.ActualWidth + 24), ([int]$c.ActualHeight + 24), 96, 96, ([Windows.Media.PixelFormats]::Pbgra32)
@@ -1131,6 +1257,7 @@ $HoverText.Text = Describe $null
 $Clean.ItemsSource = $items
 $Root.Text = $ScanPath
 $script:shotTicks = 0
+if ($Tab) { foreach ($ti in $Tabs.Items) { if ("$($ti.Header)" -like "$Tab*") { $Tabs.SelectedItem = $ti } } }
 $win.add_ContentRendered({ $script:measure = [DiskTidy.Cleaner]::MeasureAll($items); Start-Scan })
 $timer.Start()
 [void]$win.ShowDialog()

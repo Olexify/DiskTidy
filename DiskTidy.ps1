@@ -512,6 +512,7 @@ $cfgFile = Join-Path $env:APPDATA 'DiskTidy\settings.json'
 $cfg = @{ Theme = 'Light'; Zoom = 1.0 }
 try { $j = Get-Content $cfgFile -Raw | ConvertFrom-Json; if ($j.Theme) { $cfg.Theme = $j.Theme }; if ($j.Zoom) { $cfg.Zoom = [double]$j.Zoom } } catch { }
 if ($Theme) { $cfg.Theme = $Theme }
+if ($Shot) { $cfg.Zoom = 1.0 }
 function Save-Cfg { try { New-Item -ItemType Directory (Split-Path $cfgFile) -Force | Out-Null; $cfg | ConvertTo-Json | Set-Content $cfgFile } catch { } }
 
 # ---------- what can be cleaned (Downloads, Recycle Bin, Documents, Desktop, .claude, Docker, projects: never listed) ----------
@@ -687,8 +688,8 @@ if (-not $themes.Contains($cfg.Theme)) { $cfg.Theme = 'Light' }
   <Grid x:Name="RootGrid" Margin="12">
     <Grid.LayoutTransform><ScaleTransform x:Name="Zoom" ScaleX="1" ScaleY="1"/></Grid.LayoutTransform>
     <Grid.RowDefinitions>
-      <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="3*"/><RowDefinition Height="Auto"/>
-      <RowDefinition Height="10"/><RowDefinition Height="2*"/>
+      <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition x:Name="MapRow" Height="1*" MinHeight="140"/>
+      <RowDefinition Height="12"/><RowDefinition x:Name="PanelRow" Height="1.25*" MinHeight="160"/>
     </Grid.RowDefinitions>
 
     <DockPanel Grid.Row="0" Margin="0,0,0,8">
@@ -709,22 +710,32 @@ if (-not $themes.Contains($cfg.Theme)) { $cfg.Theme = 'Light' }
       <WrapPanel x:Name="Crumbs" VerticalAlignment="Center" ToolTip="Click any folder to jump back to it. Backspace or the mouse back button goes up one level."/>
     </DockPanel>
 
-    <Grid Grid.Row="2">
-      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="320"/></Grid.ColumnDefinitions>
-      <Border BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="4">
-        <Canvas x:Name="Map" ClipToBounds="True" Background="{DynamicResource MapBg}"/>
-      </Border>
-      <ListBox Grid.Column="1" x:Name="Kids" Margin="8,0,0,0" FontFamily="Consolas" FontSize="12"/>
-    </Grid>
+    <DockPanel Grid.Row="2">
+      <StackPanel DockPanel.Dock="Bottom" Margin="0,6,0,0">
+        <TextBlock x:Name="HoverText" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Fg}"/>
+        <WrapPanel x:Name="Legend" Margin="0,4,0,0"/>
+      </StackPanel>
+      <Grid>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="200"/><ColumnDefinition Width="10"/><ColumnDefinition x:Name="ListCol" Width="320" MinWidth="120"/></Grid.ColumnDefinitions>
+        <Border BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="4">
+          <Canvas x:Name="Map" ClipToBounds="True" Background="{DynamicResource MapBg}"/>
+        </Border>
+        <GridSplitter Grid.Column="1" Width="10" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="Transparent" Cursor="SizeWE" ToolTip="Drag to resize">
+          <GridSplitter.Template><ControlTemplate TargetType="GridSplitter">
+            <Border Background="Transparent"><Border Width="4" Height="44" CornerRadius="2" Background="{DynamicResource Muted}" Opacity="0.5"/></Border>
+          </ControlTemplate></GridSplitter.Template>
+        </GridSplitter>
+        <ListBox Grid.Column="2" x:Name="Kids" FontFamily="Consolas" FontSize="12"/>
+      </Grid>
+    </DockPanel>
 
-    <StackPanel Grid.Row="3" Margin="0,6,0,0">
-      <TextBlock x:Name="HoverText" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource Fg}"/>
-      <WrapPanel x:Name="Legend" Margin="0,4,0,0"/>
-    </StackPanel>
+    <GridSplitter Grid.Row="3" Height="12" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" ResizeDirection="Rows" Background="Transparent" Cursor="SizeNS" ToolTip="Drag to resize the map and the panel below">
+      <GridSplitter.Template><ControlTemplate TargetType="GridSplitter">
+        <Border Background="Transparent"><Border Width="70" Height="4" CornerRadius="2" Background="{DynamicResource Muted}" Opacity="0.5"/></Border>
+      </ControlTemplate></GridSplitter.Template>
+    </GridSplitter>
 
-    <GridSplitter Grid.Row="4" HorizontalAlignment="Stretch" Height="4" VerticalAlignment="Center" Background="{DynamicResource Line}" ToolTip="Drag to resize"/>
-
-    <TabControl Grid.Row="5" x:Name="Tabs" Padding="8">
+    <TabControl Grid.Row="4" x:Name="Tabs" Padding="8">
       <TabItem Header="Disk cleanup">
         <DockPanel>
           <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
@@ -1199,6 +1210,10 @@ $win.add_PreviewKeyDown({ param($s, $e)
   elseif ($e.Key -eq 'Back' -and -not ($e.OriginalSource -is [Windows.Controls.TextBox]) -and $script:cur.Parent) { $from = $script:cur; Navigate $script:cur.Parent; Select-Node $from; $e.Handled = $true } })
 $win.add_PreviewMouseUp({ param($s, $e)
   if ($e.ChangedButton -eq 'XButton1' -and $script:cur.Parent) { $from = $script:cur; Navigate $script:cur.Parent; Select-Node $from; $e.Handled = $true } })
+# Fit the window to the screen (it was cut off on laptops with display scaling).
+$wa = [Windows.SystemParameters]::WorkArea
+$win.Width = [math]::Min(1320, $wa.Width * 0.94); $win.Height = [math]::Min(980, $wa.Height * 0.94)
+$win.WindowStartupLocation = 'CenterScreen'
 $ico = Join-Path $PSScriptRoot 'DiskTidy.ico'
 if (Test-Path $ico) { $win.Icon = [Windows.Media.Imaging.BitmapFrame]::Create([Uri]$ico) }
 $ShortcutBtn.add_Click({

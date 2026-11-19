@@ -574,16 +574,17 @@ Item 'Hugging Face models' Caution "$U\.cache\huggingface" 'AI models downloaded
 
 if ($Shot) { # README screenshot: a typical PC's numbers instead of this one's (and no list of what is installed here)
   $demo = [ordered]@{ 'Your Temp folder' = 6.8GB; 'Windows Temp' = 410MB; 'Crash dumps' = 1.2GB; 'npm cache' = 2.9GB; 'pip and uv caches' = 870MB
-    'GPU shader caches' = 640MB; 'Chrome cache' = 1.1GB; 'Desktop app caches' = 920MB; 'Windows Update downloads' = 3.4GB; 'Hugging Face models' = 4.6GB }
+    'GPU shader caches' = 640MB; 'Chrome cache' = 1.1GB; 'Desktop app caches' = 920MB; 'Windows Update downloads' = 3.4GB; 'Gradle and Maven caches' = 2.2GB }
   $keepItems = @($items | Where-Object { $demo.Contains($_.Name) }); $items.Clear()
   foreach ($i in $keepItems) { $i.Size = [long]$demo[$i.Name]; $items.Add($i) }
+  $items[0].Explanation = 'Scratch space apps use while they work: installer leftovers, render files, session data. Apps recreate what they need. Anything touched in the last 2 hours or still open is skipped. Expand it to pick folders.'
   function DemoSub($name, $size, $note, $checked = $true) {
     $s = New-Object DiskTidy.SubItem -Property @{ Name = $name; Size = [long]$size; Note = $note; Kind = 'Folder'; Paths = [string[]]@('x'); Key = $name }; $s.Checked = $checked; $s }
   $items[0].Subs = [Collections.Generic.List[DiskTidy.SubItem]]@(
-    (DemoSub 'remotion-v4.0-assets*   (48 similar folders)' 2.1GB 'Remotion render leftovers'),
-    (DemoSub 'claude\' 1.9GB 'Claude Code session files (tool outputs, scratchpads of sessions you may reopen). Kept unless you tick it.' $false),
+    (DemoSub 'render-assets-*   (48 similar folders)' 2.1GB 'Video render leftovers'),
+    (DemoSub 'app-sessions\' 1.9GB 'Session files of an app you may reopen. Kept unless you tick it.' $false),
     (DemoSub '[812 loose files]' 1.3GB ''), (DemoSub 'pip-unpack-*   (17 similar folders)' 690MB ''),
-    (DemoSub 'chrome-devtools-mcp-profile\' 520MB 'chrome-devtools MCP scratch'), (DemoSub 'NVIDIA Corporation\' 310MB ''))
+    (DemoSub 'browser-test-profile\' 520MB 'Test browser scratch'), (DemoSub 'NVIDIA Corporation\' 310MB ''))
 }
 # Made-up drive for README screenshots: looks like a typical PC, contains nothing from this one.
 function New-MockDrive {
@@ -600,8 +601,8 @@ function New-MockDrive {
   $root = MockDir $null 'C:\'
   $u = MockPath $root 'Users\you'; $loc = MockPath $u 'AppData\Local'
   $tmp = MockDir $loc 'Temp'; MockFiles $tmp 70 @('tmp', 'log', 'bin') 'tmp' 200KB 60MB
-  foreach ($k in 1..14) { MockFiles (MockDir $tmp "remotion-v4.0-assets$k") 6 @('png', 'mp4') 'frame' 5MB 70MB }
-  MockFiles (MockDir $tmp 'claude') 40 @('json', 'txt') 'session' 1MB 40MB
+  foreach ($k in 1..14) { MockFiles (MockDir $tmp "render-assets-$k") 6 @('png', 'mp4') 'frame' 5MB 70MB }
+  MockFiles (MockDir $tmp 'app-sessions') 40 @('json', 'txt') 'session' 1MB 40MB
   MockFiles (MockPath $loc 'npm-cache\_cacache') 140 @('tgz') 'pkg' 100KB 9MB
   MockFiles (MockPath $loc 'Google\Chrome\User Data\Default\Cache') 90 @('bin') 'cache' 100KB 4MB
   MockFiles (MockPath $loc 'NVIDIA\DXCache') 50 @('bin') 'shader' 1MB 20MB
@@ -612,7 +613,7 @@ function New-MockDrive {
   MockFiles (MockDir $u 'Downloads') 40 @('zip', 'exe', 'iso', 'msi') 'download' 5MB 900MB
   foreach ($p in 'web-shop', 'game-mod', 'notes-app', 'api-server') {
     $pr = MockPath $u "Projects\$p"; MockFiles (MockDir $pr 'node_modules') 90 @('js', 'node', 'map') 'module' 30KB 3MB; MockFiles (MockDir $pr 'src') 40 @('ts', 'js', 'json') 'src' 5KB 400KB }
-  MockFiles (MockPath $u '.cache\huggingface') 6 @('safetensors', 'gguf') 'model' 400MB 3GB
+  MockFiles (MockPath $u '.gradle\caches') 60 @('jar', 'bin') 'dep' 5MB 120MB
   $w = MockDir $root 'Windows'; MockFiles (MockDir $w 'System32') 320 @('dll', 'exe', 'sys') 'sys' 100KB 30MB
   foreach ($k in 1..30) { MockFiles (MockDir (MockDir $w 'WinSxS') "amd64_component_$k") 10 @('dll', 'cat') 'part' 50KB 8MB }
   MockFiles (MockDir $w 'Installer') 30 @('msi', 'cab') 'setup' 10MB 300MB

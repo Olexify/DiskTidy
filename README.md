@@ -1,76 +1,88 @@
-# DiskTidy
+<h1>🧹 DiskTidy</h1>
 
-A small Windows app that shows what fills your disk and cleans the junk safely. It explains every item before you delete it.
+### A free Windows app that shows what's filling your disk and cleans the junk safely, explaining every item before it deletes anything.
 
-![DiskTidy: disk map on top, cleanup list below (example data)](docs/screenshot.png)
+Your drive is full again. Windows says "Temporary files: 24 GB" and offers one big scary **Delete** button. What *are* those files? Will something break? Nobody knows, so nobody clicks.
 
-*The screenshot shows example data, not a real PC.*
+**DiskTidy shows you what's there, explains it in plain words and lets you pick.** A map of your disk on top, a list of known junk below, and a short note on every line: what it is, why it's there, and what happens if it goes. Then you tick, it cleans. That's the whole idea 😎
 
-**No install, no dependencies, no internet.** It is one PowerShell script that uses only what ships with Windows 10/11 (PowerShell 5.1, WPF and the built-in C# compiler). It never connects anywhere, so nothing about your PC leaves it.
+<p align="center"><a href="https://github.com/Olexify/DiskTidy/releases/latest"><img src="https://img.shields.io/badge/Windows-Download-18181B?style=for-the-badge&logo=windows&logoColor=white&labelColor=0078D4&color=18181B" height="44" alt="Download for Windows"></a></p>
 
-**[Download the latest release](https://github.com/Olexify/DiskTidy/releases/latest)**, unzip it anywhere, and double-click `DiskTidy.cmd`.
+<p align="center"><img src="docs/screenshot.png" width="900" alt="DiskTidy: disk map on top, cleanup list with a folder picker below (example data)"><br><sub>Example data, not a real PC. Your real disk is probably messier. Everyone's is.</sub></p>
 
-## Disk cleanup
+<p align="center"><b>Free · no install · no account · no internet, ever · one script · Windows 10 & 11</b></p>
 
-- About 30 known places where Windows, browsers, dev tools and apps pile up caches and leftovers: Temp folders, crash dumps, npm, pip, uv, Cargo and Go caches, GPU shader caches, Chrome, Edge and desktop-app caches, old update files, and more.
-- Each one shows its real location, its size, a **Safe** or **Caution** badge, and a plain explanation of what it is and what happens if you delete it.
-- **Pick exactly what goes.** Expand any item to see what's inside as a tree with checkboxes. Untick a folder to keep it, or open it and untick only part of it.
-- Hundreds of look-alike folders, such as render leftovers named `assets-x7f3…`, collapse into one line.
-- Folders worth keeping start unticked, for example the session files of AI coding tools.
-- Drag the grip under any list to make it taller.
-- Right-click any line to open it in Explorer or find it in the disk map.
+---
 
-## Disk map
+## 🚀 Get it running
 
-- A treemap of any drive or folder, like WizTree or WinDirStat: the bigger the block, the more space it takes. Files are coloured by type, and folders the cleanup list can empty get an orange outline.
-- Hover over a block to outline it and see its path and size. Click to select, double-click to zoom in.
-- Clickable breadcrumbs at the top jump back to any parent folder. Backspace or the mouse back button go up one level.
-- Right-click a block to open it in Explorer or zoom.
-- It scans only when you press **Scan** or a drive button, using at most half your CPU cores. Turn on **Scan on start** if you want it to scan every time it opens.
+1. **[Download the latest release](https://github.com/Olexify/DiskTidy/releases/latest)** (`DiskTidy-vX.Y.Z.zip`, about 35 KB. Yes, kilobytes.)
+2. Unzip it anywhere.
+3. Double-click `DiskTidy.cmd`. Done. 🎉
 
-## Drives (read-only)
+Optional: click **Desktop shortcut** in the app for a proper icon. Some system folders need admin; the app has a **Restart as admin** button for that.
 
-- Every physical disk with its health, temperature, SSD life used, power-on hours and errors the drive could not fix. Temperature, life used and error counts need admin.
-- Plain warnings when a drive starts failing, for example "copy your important files off it now".
-- Partitions with free-space bars, including which one Windows runs from.
-- Buttons for Disk Management (shrink a volume, create a new one) and for disk tools you already have installed, such as Samsung Magician, CrystalDiskInfo or Rescuezilla.
-- DiskTidy never writes to a disk here. To move Windows to a new SSD, use a cloning tool.
+## 🧽 Disk cleanup: the main event
 
-## RAM cleanup (optional)
+About 30 places where Windows, browsers, dev tools and apps quietly hoard stuff: Temp folders, crash dumps, npm, pip, uv, Cargo and Go caches, GPU shader caches, browser and desktop-app caches, old Windows Update files and more.
 
-- Trims the memory of the apps you pick, like Mem Reduct. Nothing closes and no data is lost. A trimmed app just reloads its memory when you switch back. Nothing is ticked by default.
+- 🏷️ **Every line explains itself.** Its real location, its size, a **Safe** or **Caution** badge, and a plain note on what happens if you delete it.
+- 🌳 **Pick exactly what goes.** Expand any item and its folders appear as a tree with checkboxes. Untick a folder to keep it, or open it and untick just part of it.
+- 🧺 **Look-alike folders get bundled.** 48 folders named `render-assets-x7f3…` become one line, not 48.
+- 🛡️ **Things worth keeping start unticked**, such as session files of apps you might reopen.
+- 🖱️ **Right-click any line** to open it in Explorer or find it on the disk map.
+
+## 🗺️ Disk map: where did 200 GB go?
+
+A treemap of any drive or folder, like WizTree: the bigger the block, the more space it eats.
+
+- 🎨 Files are coloured by type (videos, images, archives, programs and so on), and junk the cleanup list can remove gets an **orange outline**.
+- 👆 Hover over a block to outline it and see its path and size. Click to select, double-click to zoom in.
+- 🧭 Clickable breadcrumbs at the top jump back to any parent folder. Backspace or the mouse back button go up one level.
+- 🐢 It scans only when you press **Scan**, and uses at most half your CPU cores, so your PC doesn't turn into a space heater. Prefer automatic? Switch on **Scan on start**.
+
+## 💽 Drives: is my SSD OK? (read-only)
+
+- ❤️ Health, temperature, SSD life used, power-on hours and errors the drive couldn't fix, for every disk.
+- 🚨 Plain warnings when a drive starts dying, like "copy your important files off it now". No SMART jargon.
+- 📊 Partitions with free-space bars, including which one Windows lives on.
+- 🔧 Buttons for Disk Management and for disk tools you already have, such as Samsung Magician, CrystalDiskInfo or Rescuezilla.
+- ✋ It never writes to a disk here. Cloning Windows is a job for a dedicated cloning tool, not a 35 KB script.
+
+## 🧠 RAM cleanup (optional)
+
+- Trims the memory of the apps **you** pick, like Mem Reduct. Nothing closes and no data is lost. The app just reloads its memory when you switch back to it.
 - **Clear standby cache** drops cached file data from RAM. It needs admin.
+- The honest bit: Windows already does this by itself when RAM runs low. It's handy right before a game or a render, and mostly cosmetic the rest of the time.
 
-## Comfort
+## 🛋️ Comfort stuff
 
-- Four themes: Light, Dark, Midnight and Sand.
-- Ctrl + mouse wheel zooms the whole window, and Ctrl+0 resets it.
-- Drag the dividers to resize the map, its side list and the panel below.
-- Theme, zoom, divider sizes and the cleanup list's scroll position are remembered between launches.
-- **Desktop shortcut** creates a desktop shortcut with the app's icon.
+- 🌗 Four themes: Light, Dark, Midnight and Sand.
+- 🔍 Ctrl + mouse wheel zooms the whole window, and Ctrl+0 resets it.
+- ↕️ Drag the dividers to resize the map, its side list and the panel below.
+- 💾 Theme, zoom, divider sizes and the list's scroll position are remembered between launches.
 
-## Safety rules
+## 🛡️ What it will never touch
 
-- **Never touched:** Downloads, Recycle Bin, Documents, Desktop, your projects, Docker, app settings and logins.
-- Files changed in the last 2 hours, and files an app has open, are skipped. That makes it safe to run without rebooting.
-- Junctions and symlinks are never followed, so a link can't lead it outside the folder being cleaned.
-- Items marked **Caution** (AI models, IDE indexes, build caches) start unticked. Deleting them is harmless, but they get downloaded or rebuilt the next time something needs them.
-- Before deleting, it asks you to confirm and shows the size of every item.
+| 🚫 Off-limits | ✅ How it stays safe |
+| :--- | :--- |
+| Downloads, Recycle Bin, Documents, Desktop | Skips files changed in the last 2 hours and files an app has open |
+| Your projects, Docker, app settings, logins | Never follows junctions or symlinks out of the folder it cleans |
+| Anything not on its list | **Caution** items (AI models, IDE indexes, build caches) start unticked |
+| | Shows every item and its size, then asks before deleting |
 
-Some items (Windows Temp, Windows Update downloads, memory dumps) need admin. Click **Restart as admin** in the app.
+## 🛠️ For developers
 
-## For developers
+The whole app is `DiskTidy.ps1`: WPF in XAML, plus inline C# for the scanner, the treemap layout, the cleaner and RAM trimming, compiled when the app starts. Settings live in `%APPDATA%\DiskTidy\settings.json`.
 
-To check that the cleanup logic still works after you change something, run the built-in self-test. It covers the treemap maths, cleaning with unticked and part-ticked folders, junction safety, look-alike grouping, drive warnings and RAM info:
+A built-in self-test checks the treemap maths, cleaning with unticked and part-ticked folders, junction safety, look-alike grouping, drive warnings and RAM info:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File DiskTidy.ps1 -SelfTest
 ```
 
-- `DiskTidy.ps1` holds the whole app. The window is WPF in XAML. Scanning, the treemap layout, cleaning and RAM trimming are inline C#, compiled when the app starts.
-- Settings are saved to `%APPDATA%\DiskTidy\settings.json`.
-- `-Shot <file.png>` saves a screenshot built from example data only. It's used for this README.
+`-Shot <file.png>` saves a screenshot built from example data only. That's how the picture above was made.
 
-## License
+## 📜 License
 
-MIT, see [LICENSE](LICENSE). Use at your own risk: the app is careful, but it deletes files.
+MIT, see [LICENSE](LICENSE). Use at your own risk: DiskTidy is careful, but it does delete files. That's kind of the point. 🧹

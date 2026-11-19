@@ -2,15 +2,15 @@
 
 ### A free Windows app that shows what's filling your disk and cleans the junk safely, explaining every item before it deletes anything.
 
-Your drive is full again. Windows says "Temporary files: 24 GB" and offers one big scary **Delete** button. What *are* those files? Will something break? Nobody knows, so nobody clicks.
+Your C: drive is red again. Windows says "Temporary files: 24 GB" and offers one big scary **Delete** button. What *are* those files? Will something break? Nobody knows, so nobody clicks.
 
 **DiskTidy shows you what's there, explains it in plain words and lets you pick.** A map of your disk on top, a list of known junk below, and a short note on every line: what it is, why it's there, and what happens if it goes. Then you tick, it cleans. That's the whole idea 😎
 
 <p align="center"><a href="https://github.com/Olexify/DiskTidy/releases/latest"><img src="https://img.shields.io/badge/Windows-Download-18181B?style=for-the-badge&logo=windows&logoColor=white&labelColor=0078D4&color=18181B" height="44" alt="Download for Windows"></a></p>
 
-<p align="center"><img src="docs/screenshot.png" width="900" alt="DiskTidy: disk map on top, cleanup list with a folder picker below (example data)"><br><sub>Example data, not a real PC. Your real disk is probably messier. Everyone's is.</sub></p>
-
 <p align="center"><b>Free · no install · no account · no internet, ever · one script · Windows 10 & 11</b></p>
+
+<p align="center"><img src="docs/screenshot.png" width="900" alt="DiskTidy: disk map on top, cleanup list with a folder picker below (example data)"><br><sub>Sample data. Your real drive is probably worse.</sub></p>
 
 ---
 
@@ -20,11 +20,11 @@ Your drive is full again. Windows says "Temporary files: 24 GB" and offers one b
 2. Unzip it anywhere.
 3. Double-click `DiskTidy.cmd`. Done. 🎉
 
-Optional: click **Desktop shortcut** in the app for a proper icon. Some system folders need admin; the app has a **Restart as admin** button for that.
+Want a proper icon? Click **Desktop shortcut** in the app. Need to clean system folders? Hit **Restart as admin**.
 
-## 🧽 Disk cleanup: the main event
+## 🧽 Disk cleanup: name and shame
 
-About 30 places where Windows, browsers, dev tools and apps quietly hoard stuff: Temp folders, crash dumps, npm, pip, uv, Cargo and Go caches, GPU shader caches, browser and desktop-app caches, old Windows Update files and more.
+About 30 places where Windows, browsers, dev tools and apps quietly stash gigabytes behind your back: Temp folders, crash dumps, npm, pip, uv, Cargo and Go caches, GPU shader caches, browser and desktop-app caches, old Windows Update files and more.
 
 - 🏷️ **Every line explains itself.** Its real location, its size, a **Safe** or **Caution** badge, and a plain note on what happens if you delete it.
 - 🌳 **Pick exactly what goes.** Expand any item and its folders appear as a tree with checkboxes. Untick a folder to keep it, or open it and untick just part of it.
@@ -32,14 +32,14 @@ About 30 places where Windows, browsers, dev tools and apps quietly hoard stuff:
 - 🛡️ **Things worth keeping start unticked**, such as session files of apps you might reopen.
 - 🖱️ **Right-click any line** to open it in Explorer or find it on the disk map.
 
-## 🗺️ Disk map: where did 200 GB go?
+## 🗺️ Disk map: find the 200 GB culprit
 
 A treemap of any drive or folder, like WizTree: the bigger the block, the more space it eats.
 
 - 🎨 Files are coloured by type (videos, images, archives, programs and so on), and junk the cleanup list can remove gets an **orange outline**.
 - 👆 Hover over a block to outline it and see its path and size. Click to select, double-click to zoom in.
 - 🧭 Clickable breadcrumbs at the top jump back to any parent folder. Backspace or the mouse back button go up one level.
-- 🐢 It scans only when you press **Scan**, and uses at most half your CPU cores, so your PC doesn't turn into a space heater. Prefer automatic? Switch on **Scan on start**.
+- 🐢 It scans only when you press **Scan**, and uses at most half your CPU cores, so your fans don't take off. Prefer automatic? Switch on **Scan on start**.
 
 ## 💽 Drives: is my SSD OK? (read-only)
 
@@ -53,9 +53,9 @@ A treemap of any drive or folder, like WizTree: the bigger the block, the more s
 
 - Trims the memory of the apps **you** pick, like Mem Reduct. Nothing closes and no data is lost. The app just reloads its memory when you switch back to it.
 - **Clear standby cache** drops cached file data from RAM. It needs admin.
-- The honest bit: Windows already does this by itself when RAM runs low. It's handy right before a game or a render, and mostly cosmetic the rest of the time.
+- The honest bit: Windows already does this by itself when RAM runs low. It's handy right before a game or a render, and mostly a placebo the rest of the time.
 
-## 🛋️ Comfort stuff
+## 🛋️ Quality of life (for a 35 KB script)
 
 - 🌗 Four themes: Light, Dark, Midnight and Sand.
 - 🔍 Ctrl + mouse wheel zooms the whole window, and Ctrl+0 resets it.
